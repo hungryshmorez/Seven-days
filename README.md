@@ -2,7 +2,7 @@
 
 A found-footage horror game: the Prologue plus seven days, each a recorded tape you can only partly steer. Built for the [RUN.world](https://series-1.gitbook.io/rundot-docs) platform.
 
-**RUN.world is the primary home.** This repository is a source mirror (code, docs, landing page). It is not a playable GitHub Pages build; the game needs the RUN host for cloud saves, clips, leaderboard and the rest of the platform features below. Run it in a plain browser and it still plays, with every platform feature silently off.
+**RUN.world is the primary home.** This repository also builds a plain static version (`npm run build:static`, deployed to GitHub Pages by `.github/workflows/pages.yml`): same game, saves in the browser, platform features (cloud saves, clips, leaderboard) off. See [`COMBINED_HANDOFF.md`](COMBINED_HANDOFF.md) for the route and files. The game needs the RUN host only for those platform features.
 
 Play: set `PLAY_URL` in [`docs/index.html`](docs/index.html) once the game has a RUN link.
 
