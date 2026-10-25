@@ -107,6 +107,8 @@ export class Day1 {
     private tag = false;
     private rule = false;
     private blockaded = false;
+    private brkLed: Record<string, THREE.Mesh> = {};
+    private brkLight!: THREE.PointLight;
     private breaker: string[] = [];
     private powered = false;
     private watched = false;
@@ -332,6 +334,26 @@ export class Day1 {
         const bw = X1 + 24 * CELL + 0.1;
         this.box(0.1, 0.6, 0.5, 0x444c44, bw, 1.4, cz(19) - 0.6);
         this.box(0.1, 0.6, 0.5, 0x444c44, bw, 1.4, cz(19) + 0.1);
+        // Labelled, self-lit switch plates with status lamps: findable in a blackout.
+        const plate = (text: string, z: number, sub: string) => {
+            const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+            const x = cv.getContext('2d')!;
+            x.fillStyle = '#1b1f1b'; x.fillRect(0, 0, 256, 128);
+            x.strokeStyle = '#d8d2a0'; x.lineWidth = 6; x.strokeRect(4, 4, 248, 120);
+            x.fillStyle = '#f0e8b0'; x.font = 'bold 40px monospace'; x.textAlign = 'center'; x.fillText(text, 128, 62);
+            x.font = 'bold 26px monospace'; x.fillStyle = '#ff9a7a'; x.fillText(sub, 128, 104);
+            const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
+            const m = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.25), new THREE.MeshBasicMaterial({ map: tx }));
+            m.position.set(bw + 0.07, 1.55, z); m.rotation.y = Math.PI / 2; this.group.add(m);
+            const led = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.08, 0.08), new THREE.MeshBasicMaterial({ color: 0xff2a1a }));
+            led.position.set(bw + 0.07, 1.28, z); this.group.add(led);
+            this.brkLed[text] = led;
+        };
+        plate('LIGHTING', cz(19) - 0.6, 'FIRST');
+        plate('ARCHIVE', cz(19) + 0.1, 'SECOND');
+        this.brkLight = new THREE.PointLight(0xff6a3a, 0, 7, 1.6);
+        this.brkLight.position.set(bw + 0.9, 1.9, cz(19) - 0.25);
+        this.group.add(this.brkLight);
         this.box(0.1, 0.8, 1.4, 0x222222, bw, 1.3, cz(17) + 0.3);
         this.termCanvas = document.createElement('canvas');
         this.termCanvas.width = 320;
@@ -407,8 +429,8 @@ export class Day1 {
         }, () => !this.tag && this.stage !== 'chase', 3);
         this.box(0.2, 0.02, 0.1, 0x3a8582, cx(14), 0.03, cz(3));
         add('d1_shelf', 'Drag shelf across the door', cx(25), 1.0, cz(17) + 0.2, () => this.dragShelf(), () => (this.stage === 'closet' || this.stage === 'chase') && !this.blockaded && c.p.z > 17 * CELL, 3.5);
-        add('d1_brk_light', 'Throw LIGHTING breaker', X1 + 24 * CELL + 0.3, 1.4, cz(19) - 0.6, () => this.breakerHit('LIGHTING'), () => this.blockaded && !this.powered, 2.8);
-        add('d1_brk_arch', 'Throw ARCHIVE breaker', X1 + 24 * CELL + 0.3, 1.4, cz(19) + 0.1, () => this.breakerHit('ARCHIVE'), () => this.blockaded && !this.powered, 2.8);
+        add('d1_brk_light', 'Throw LIGHTING breaker (first)', X1 + 24 * CELL + 0.3, 1.4, cz(19) - 0.6, () => this.breakerHit('LIGHTING'), () => this.blockaded && !this.powered && !this.breaker.includes('LIGHTING'), 3.4);
+        add('d1_brk_arch', 'Throw ARCHIVE breaker (second)', X1 + 24 * CELL + 0.3, 1.4, cz(19) + 0.1, () => this.breakerHit('ARCHIVE'), () => this.blockaded && !this.powered && !this.breaker.includes('ARCHIVE'), 3.4);
         add('d1_term', 'Play recording', X1 + 24 * CELL + 0.5, 1.3, cz(17) + 0.3, () => this.watch(), () => this.powered && !this.watched, 3);
     }
 
@@ -487,7 +509,7 @@ export class Day1 {
             this.blockade(true);
             this.placeMoppet(25, 15);
             this.mState = 'DOOR';
-            c.objective('Restore power: LIGHTING, then ARCHIVE.');
+            c.objective('Find the breaker panel on the closet wall. Throw LIGHTING first, then ARCHIVE.');
         } else if (id === 'd1_finale') {
             this.solved = true; this.sighted = true; this.watched = true; this.powered = true;
             this.reset('finale');
@@ -529,7 +551,7 @@ export class Day1 {
             case 'sighted': return 'Something waits at the end of the hall. Find another way.';
             case 'chase': return 'RUN. Find the maintenance closet.';
             case 'closet': return 'Drag the shelf across the door.';
-            case 'blocked': return 'Restore power: LIGHTING, then ARCHIVE.';
+            case 'blocked': return 'Find the breaker panel on the closet wall. Throw LIGHTING first, then ARCHIVE.';
             case 'powered': return 'Play the recording.';
             case 'finale': return 'RUN. Follow the emergency corridor.';
             default: return '...';
@@ -683,7 +705,7 @@ export class Day1 {
                 this.stage = 'blocked';
                 this.mState = 'DOOR';
                 c.say('PROTAGONIST', 'The pipe. Jam it through the handles. There.', 3);
-                c.objective('Restore power: LIGHTING, then ARCHIVE.');
+                c.objective('Find the breaker panel on the closet wall. Throw LIGHTING first, then ARCHIVE.');
                 this.cpMop = { x: cx(25), z: cz(15) };
                 c.checkpoint('d1_terminal');
                 this.cpId = 'd1_terminal';
@@ -703,7 +725,11 @@ export class Day1 {
         c.sfx.thud(0.3);
         c.sfx.click(0.5);
         c.track('d1_breaker', { which });
-        if (this.breaker.length < 2) return;
+        this.setLed(which, true);
+        if (this.breaker.length < 2) {
+            if (which === 'LIGHTING') { c.say('PROTAGONIST', 'One lamp lit. Now the ARCHIVE breaker, just below.', 3.5); c.objective('Throw the ARCHIVE breaker.'); }
+            return;
+        }
         if (this.breaker[0] === 'LIGHTING' && this.breaker[1] === 'ARCHIVE') {
             this.powered = true;
             this.stage = 'powered';
@@ -713,11 +739,31 @@ export class Day1 {
             c.objective('Play the recording.');
         } else {
             this.breaker = [];
+            this.setLed('LIGHTING', false); this.setLed('ARCHIVE', false);
+            c.objective('Find the breaker panel on the closet wall. Throw LIGHTING first, then ARCHIVE.');
             this.surgeT = 1.0;
             c.sfx.staticBurst(0.6, 0.12);
             c.say('PROTAGONIST', 'Wrong order. Everything surged. Lighting first, then archive.', 4);
         }
     }
+    private setLed(which: string, on: boolean): void {
+        const led = this.brkLed[which];
+        if (led) (led.material as THREE.MeshBasicMaterial).color.set(on ? 0x38ff6a : 0xff2a1a);
+    }
+
+    /** Where the player should go next, for the HUD waypoint. null = no explicit target (the game falls back to the next open interaction). */
+    waypoint(): { x: number; y: number; z: number; label: string } | null {
+        const bw = X1 + 24 * CELL + 0.3;
+        if ((this.stage === 'closet' || this.stage === 'chase') && !this.blockaded) return { x: cx(25), y: 1.4, z: cz(17) + 0.2, label: 'SHELF' };
+        if (this.blockaded && !this.powered) {
+            return this.breaker.includes('LIGHTING')
+                ? { x: bw, y: 1.6, z: cz(19) + 0.1, label: 'ARCHIVE BREAKER (2nd)' }
+                : { x: bw, y: 1.6, z: cz(19) - 0.6, label: 'LIGHTING BREAKER (1st)' };
+        }
+        if (this.powered && !this.watched) return { x: X1 + 24 * CELL + 0.5, y: 1.4, z: cz(17) + 0.3, label: 'MONITOR' };
+        return null;
+    }
+
     private watch(): void {
         const c = this.ctx;
         this.watched = true;
@@ -830,6 +876,8 @@ export class Day1 {
             if (this.introT > 5) { c.setHead(null); c.lock(false); this.stage = 'explore'; c.objective('Find a way out.'); }
         }
         this.updateLights(dt);
+        if (this.brkLight) this.brkLight.intensity = this.blockaded && !this.powered ? 5 + Math.sin(this.t * 4) * 2 : 0;
+        if (this.powered) { this.setLed('LIGHTING', true); this.setLed('ARCHIVE', true); }
         // ambience: duct rattle / distant wet steps
         this.ambT -= dt;
         if (this.ambT <= 0) { this.ambT = 12 + Math.random() * 14; if (Math.random() < 0.6) c.sfx.noise(0.5, 300, 2, 0.04, Math.random() * 2 - 1, 'bandpass'); else c.sfx.thud(0.05, Math.random() * 2 - 1); }

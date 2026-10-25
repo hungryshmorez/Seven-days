@@ -45,6 +45,8 @@ interface Interactable {
     mode: Mode;
     enabled: () => boolean;
     run: () => void;
+    /** set once the player has used it, so the HUD waypoint moves on */
+    used?: boolean;
 }
 interface Checkpoint { id: string; x: number; z: number; yaw: number; mode: Mode; chase: boolean }
 interface Settings { reducedFlash: boolean; reducedMotion: boolean }
@@ -473,7 +475,7 @@ export class PrologueGame {
         for (const l of ['N', 'NW', 'W', 'SW', 'S', 'SE', 'E', 'NE']) this.compassEls.push(el('div', 'position:absolute;top:2px;width:30px;margin-left:-15px;text-align:center;color:#ddd', this.compass, l));
         this.compassTarget = el('div', 'position:absolute;top:0;width:30px;margin-left:-15px;text-align:center;color:#ffd24a;font-size:17px', this.compass, '◆');
         this.compassDist = el('div', 'position:absolute;top:30px;left:50%;transform:translateX(-50%);font-size:12px;color:#ffd24a;text-shadow:0 0 4px #000;pointer-events:none;white-space:nowrap', r);
-        this.wp = el('div', 'position:absolute;display:none;transform:translate(-50%,-50%);text-align:center;color:#ffd24a;font-size:12px;text-shadow:0 0 4px #000;pointer-events:none;line-height:1.1', r);
+        this.wp = el('div', 'position:absolute;display:none;transform:translate(-50%,-50%);text-align:center;color:#ffd24a;font-size:12px;text-shadow:0 0 4px #000;pointer-events:none;line-height:1.1;white-space:nowrap', r);
         const card = el('div', 'position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:clamp(18px,3.6vw,34px);letter-spacing:4px;pointer-events:none;text-shadow:0 0 14px #fff;gap:10px;padding:20px', r);
         const touch = this.buildTouch(r);
 
@@ -1270,6 +1272,7 @@ export class PrologueGame {
 
     private respawn(initial = false): void {
         this.timers = [];
+        for (const it of this.interactables) it.used = false;
         if (this.cutT >= 0) { this.cutT = -1; this.runner.visible = false; this.hands.visible = true; this.lockMove = false; this.state = 'PLAY'; }
         this.placePlayer(this.cp);
         this.ui.signal.style.opacity = '0';
@@ -1493,6 +1496,7 @@ export class PrologueGame {
     private interact(): void {
         if (this.gauntlet?.active) { this.gauntlet.press('swat'); return; }
         if (this.tapeMode || this.state !== 'PLAY' || !this.currentInteract) return;
+        this.currentInteract.used = true;
         this.currentInteract.run();
     }
 
@@ -2282,12 +2286,27 @@ export class PrologueGame {
         }
     }
 
+    /** The next thing to do, indoors: a day's own explicit target, else the first open, unused interaction in route order. */
+    private objectiveTarget(): { x: number; y: number; z: number; label: string } | null {
+        if (this.mode === 'd1') { const w = this.day1.waypoint(); if (w) return w; }
+        const it = this.interactables.find((i) => i.mode === this.mode && !i.used && i.enabled());
+        if (!it) return null;
+        return { x: it.pos.x, y: it.pos.y + 0.3, z: it.pos.z, label: it.label.toUpperCase() };
+    }
+
     private updateWayfinding(): void {
-        const show = this.mode === 'out' && !this.cabinOn && !this.tapeMode && (this.state === 'PLAY' || this.state === 'CINE');
-        let tx = 0, tz = 0, label = '';
-        if (show) {
-            if (this.revealed || this.clues.has('paper')) { tx = BUN_X; tz = BUN_DOOR_Z; label = 'BUNKER'; }
+        const outdoor = this.mode === 'out' && !this.cabinOn && !this.tapeMode && (this.state === 'PLAY' || this.state === 'CINE');
+        const inside = this.mode !== 'out';
+        const indoor = inside && !this.cabinOn && !this.tapeMode && this.state === 'PLAY' && !this.lockMove && !this.gauntlet.active;
+        const show = outdoor || indoor;
+        let tx = 0, tz = 0, ty = 2, label = '';
+        if (outdoor) {
+            if (this.revealed || this.clues.has('paper')) { tx = BUN_X; tz = BUN_DOOR_Z; ty = 3; label = 'BUNKER'; }
             else if (!this.campArrived) { tx = CAMP_X; tz = CAMP_Z; label = 'CAMP'; }
+        } else if (indoor) {
+            const t = this.objectiveTarget();
+            // close enough to act on it: the prompt takes over, the marker steps aside
+            if (t && Math.hypot(t.x - this.p.x, t.z - this.p.z) > 2.4) { tx = t.x; ty = t.y; tz = t.z; label = t.label; }
         }
         const on = show && label !== '';
         this.compass.style.display = show ? 'block' : 'none';
@@ -2310,7 +2329,7 @@ export class PrologueGame {
         this.compassTarget.style.display = Math.abs(rel) < 62 ? 'block' : 'none';
         this.compassTarget.style.left = half - rel * ppd + 'px';
         this.compassDist.textContent = label + ' ' + Math.round(dist) + ' m';
-        const v = new THREE.Vector3(tx, label === 'BUNKER' ? 3 : 2, tz).project(this.camera);
+        const v = new THREE.Vector3(tx, ty, tz).project(this.camera);
         let sx = v.x, sy = v.y;
         if (v.z > 1) { sx = rel > 0 ? -0.9 : 0.9; sy = 0; }
         sx = Math.max(-0.88, Math.min(0.88, sx));
