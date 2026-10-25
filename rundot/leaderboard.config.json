@@ -1,0 +1,18 @@
+{
+  "requiresToken": false,
+  "scoreOrder": "highest",
+  "minScore": 0,
+  "maxScore": 1000,
+  "minDurationSec": 1,
+  "maxDurationSec": 7200,
+  "modes": {
+    "default": { "displayName": "Survivors" }
+  },
+  "periods": {
+    "alltime": { "displayName": "All Time", "type": "alltime" }
+  },
+  "antiCheat": {
+    "enableRateLimit": true,
+    "enableZScoreDetection": false
+  }
+}

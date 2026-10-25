@@ -1,0 +1,1 @@
+{"hooks":{"pre-command":[{"blocking":false,"command":"echo RUN.game SDK v5.23.0","name":"check-sdk-version"}]}}

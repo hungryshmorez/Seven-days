@@ -1,0 +1,84 @@
+/*
+ * Tailwind v4 CSS-first config: no tailwind.config.js — tokens live in @theme.
+ * Utilities like bg-primary / text-accent / font-display resolve against these.
+ */
+@import "tailwindcss";
+
+@theme {
+    /* Palette: near-black surfaces, white text, one accent. ADAPT per game. */
+    --color-surface: #0b0e14;
+    --color-primary: #22c55e;
+    --color-accent: #f59e0b;
+
+    /* System font stack — zero webfont payload/risk. ADAPT if brand needs a face. */
+    --font-sans: ui-sans-system, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* {
+    -webkit-tap-highlight-color: transparent;
+    scrollbar-width: none;            /* hide scrollbars (any scrollable UI) */
+}
+*::-webkit-scrollbar { display: none; }
+
+html, body, #root {
+    height: 100%;
+    overscroll-behavior: none;
+}
+
+body {
+    background: #000;
+    color: #fff;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+
+/*
+ * The device frame: a centered portrait column.
+ * Width = min(100vw, 56.25dvh): at 9:16 that fills the viewport exactly; on
+ * phones narrower than 9:16 it fills by width; on desktop it letterboxes to a
+ * centered column. Height is the full dynamic viewport height (dvh tracks
+ * mobile browser chrome). Every UI layer and the Pixi canvas live inside it.
+ */
+#app-frame {
+    position: relative;
+    width: min(100vw, calc(100dvh * 9 / 16));
+    height: 100dvh;
+    margin-inline: auto;
+    overflow: hidden;
+    background: var(--color-surface);
+}
+
+canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* Guard-bit-drag: the host locks the viewport so canvas drags (slingshot,
+       joystick) can't scroll/pull-refresh the page. touch-action: none makes
+       pointer events deliver every move. */
+    touch-action: none;
+}
+
+img {
+    /* Same class of fix as canvas: dragging a card/art must not start the
+       browser's image-drag ghost. */
+    -webkit-user-drag: none;
+    user-select: none;
+}
+
+/*
+ * Safe-area utilities (iPhone notch/home indicator encroach). The host is
+ * edge-to-edge; these pad content clear of the cutouts. Tailwind v4 @utility
+ * must be top-level, single-purpose, and can't contain & or @apply of custom
+ * classes. env(safe-area-inset-*) is 0 on devices without cutouts.
+ */
+@utility pt-safe-top {
+    padding-top: env(safe-area-inset-top);
+}
+@utility pb-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+}

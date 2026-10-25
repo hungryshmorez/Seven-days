@@ -1,0 +1,21 @@
+const { open } = require('./lib.cjs');
+(async () => {
+  const [dist, out] = process.argv.slice(2);
+  const t = await open(dist, out, { viewport: { width: 640, height: 360 } });
+  const { page, shot } = t;
+  await page.waitForSelector('text=NEW GAME', { timeout: 30000 });
+  await page.click('text=NEW GAME');
+  await page.waitForTimeout(800);
+  await page.evaluate(() => { window.__journey.go({ k: 'cinema', ep: 'day2', roam: true, tape: 2 }, null, { cycle: 1 }); });
+  await page.waitForTimeout(4000);
+  await page.evaluate(() => { window.__sd_cine.finish(); });
+  await page.waitForTimeout(6000);
+  await shot('v1');
+  await page.evaluate(() => { const e = window.__sd_cine; e.fr.yaw = 0.9; e.rig.yaw = 0.9; });
+  await page.waitForTimeout(1500);
+  await shot('v2');
+  await page.evaluate(() => { const e = window.__sd_cine; e.fr.yaw = -0.3; e.rig.pos.set(0.9, 1.55, 0); });
+  await page.waitForTimeout(1500);
+  await shot('v3');
+  await t.close();
+})();

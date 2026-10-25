@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <!-- Locked viewport: no pinch-zoom / scroll / double-tap zoom in the game shell. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>SEVEN DAYS CINEMATIC'S</title>
+    <style>
+        /* Boot cover: painted synchronously before the module bundle loads so
+           players never see a black/white flash. Removed by src/main.tsx. */
+        #boot-cover {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 9999;
+            opacity: 1;
+            transition: opacity 200ms ease;
+        }
+        #boot-cover.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="boot-cover"></div>
+    <script>
+        // If the module bundle fails to load (or takes >4s), fade the cover
+        // anyway so the player isn't stuck on a black screen forever.
+        setTimeout(function () {
+            var cover = document.getElementById('boot-cover');
+            if (cover) { cover.classList.add('hidden'); }
+        }, 4000);
+    </script>
+    <div id="root"></div>
+    <script type="module" src="./src/main.tsx"></script>
+</body>
+</html>

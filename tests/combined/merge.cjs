@@ -1,0 +1,40 @@
+// The merge ending: drive the scene by stepping it manually, screenshot each beat.
+const { open } = require('./lib.cjs');
+(async () => {
+  const [dist, out] = process.argv.slice(2);
+  const t = await open(dist, out, { viewport: { width: 640, height: 360 } });
+  const { page, shot, state } = t;
+  await page.waitForSelector('text=NEW GAME', { timeout: 30000 });
+  await page.evaluate((v) => { window.__mergeLDR = v; }, !!process.env.LDR); await page.click('text=NEW GAME').catch(() => {});
+  await page.evaluate(() => { window.__journey.go({ k: 'merge' }, null, { cycle: 1 }); });
+  await page.waitForFunction(() => !!window.__merge, null, { timeout: 30000 });
+  // take over the loop
+  await page.evaluate(() => { const m = window.__merge; cancelAnimationFrame(m.raf); window.__adv = (secs) => { const n = Math.round(secs / 0.05); for (let i = 0; i < n; i++) m.step(0.05); m.draw(); return [m.phase, +m.pt.toFixed(2)]; }; });
+  const adv = async (s) => page.evaluate((s) => window.__adv(s), s);
+  console.log('start', await adv(1.5)); await shot('01_start');
+  await page.evaluate(() => { window.__merge.keys.add('KeyW'); });
+  console.log('walk', await adv(1.8)); await shot('02_walk');
+  console.log('walk', await adv(2.2)); await shot('03_walk_closer');
+  await page.evaluate(() => { window.__merge.keys.delete('KeyW'); });
+  console.log('near', await adv(0.3), await page.evaluate(() => [window.__merge.pos.z, window.__merge.near]));
+  await shot('04_near_prompt');
+  await page.keyboard.press('KeyE');
+  console.log('insert', await adv(1.0)); await shot('05_insert_1');
+  console.log('insert', await adv(1.6)); await shot('06_insert_glow');
+  console.log('morph', await adv(1.0)); await shot('07_morph_a');
+  console.log('morph', await adv(1.6)); await shot('08_morph_b');
+  console.log('morph', await adv(1.2)); await shot('09_morph_c');
+  console.log('swirl', await adv(1.6)); await shot('10_swirl_a');
+  console.log('swirl', await adv(1.8)); await shot('11_swirl_b');
+  console.log('swirl', await adv(1.5)); await shot('12_swirl_c');
+  console.log('hosp', await adv(0.6)); await shot('13_hosp_flash');
+  console.log('hosp', await adv(2.0)); await shot('14_hosp_swirl');
+  console.log('hosp', await adv(3.5)); await shot('15_hosp_close');
+  console.log('hosp', await adv(4.5)); await shot('16_hosp_mid');
+  console.log('hosp', await adv(3.5)); await shot('17_hosp_wide');
+  console.log('out', await adv(2.5)); await shot('18_out');
+  console.log('out', await adv(4.5));
+  console.log('end', JSON.stringify(await state()));
+  console.log('errors', t.errs.length, t.errs.slice(0, 3));
+  await t.close();
+})();

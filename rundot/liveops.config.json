@@ -1,0 +1,19 @@
+{
+  "client": {
+    "values": {
+      "menuBanner": "",
+      "interstitialsEnabled": false,
+      "reminderDelayHours": 22
+    },
+    "overrides": [],
+    "experiments": [
+      {
+        "id": "reminder-delay",
+        "variants": [
+          { "id": "control", "weight": 1, "values": {} },
+          { "id": "two-days", "weight": 1, "values": { "reminderDelayHours": 46 } }
+        ]
+      }
+    ]
+  }
+}

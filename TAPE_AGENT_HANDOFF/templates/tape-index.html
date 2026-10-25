@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Seven Days — Tape</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; color: #ddd; font-family: monospace; }
+    #caption { position: fixed; left: 0; right: 0; bottom: 6%; text-align: center; padding: 0 8%; font-size: 18px; }
+    #caption:empty { display: none; }
+  </style>
+</head>
+<body>
+  <!-- Your recording goes here. Captions only: no synthesized voice. -->
+  <div id="caption"></div>
+
+  <script>
+    // Read the cycle hint if needed (information only).
+    const params = new URLSearchParams(location.search);
+    const tapeNumber = Number(params.get('tape'));
+    const cycle = Number(params.get('cycle') || 1);
+
+    // Analytics: name every interaction <category>_<action>.
+    function track(name, props) {
+      // Wire to the platform analytics once available; keep event names exact.
+      console.debug('[analytics]', name, props || {});
+    }
+
+    // Call this exactly once, at the true end of the recording.
+    function finishTape() {
+      track('tape_completed', { tape: tapeNumber, cycle: cycle });
+      parent.postMessage({ type: 'seven-days:tape-done' }, '*');
+    }
+
+    // Example only: replace with the real recording and timing.
+    track('tape_started', { tape: tapeNumber, cycle: cycle });
+    document.getElementById('caption').textContent = 'Placeholder caption.';
+    setTimeout(finishTape, 3000);
+  </script>
+</body>
+</html>

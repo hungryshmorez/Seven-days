@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seven Days</title>
+<meta name="description" content="A found-footage horror game in seven recorded days.">
+<style>
+  :root { --bg:#050506; --fg:#e8e6e1; --dim:#8d8a84; --red:#d0242b; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; padding:24px 16px; background:var(--bg); color:var(--fg);
+         font:16px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  body::after { content:""; position:fixed; inset:0; pointer-events:none; opacity:.18;
+         background:repeating-linear-gradient(0deg, rgba(255,255,255,.06) 0 1px, transparent 1px 3px); }
+  main { max-width:34rem; text-align:center; }
+  h1 { margin:0 0 .25rem; font-size:clamp(2.2rem, 11vw, 3.6rem); letter-spacing:.3em; color:var(--red); font-weight:700; padding-left:.3em; }
+  .tag { margin:0 0 2rem; color:var(--dim); letter-spacing:.2em; font-size:.8rem; text-transform:uppercase; }
+  p { margin:0 0 1.2rem; }
+  .btn { display:inline-block; min-height:48px; padding:.8rem 2rem; border:1px solid var(--fg); border-radius:10px; color:var(--fg);
+         text-decoration:none; font-weight:700; letter-spacing:.15em; }
+  .btn:hover, .btn:focus-visible { background:var(--fg); color:var(--bg); outline:none; }
+  .soon { color:var(--dim); border:1px dashed var(--dim); border-radius:10px; padding:.8rem 1rem; }
+  .links { margin-top:2rem; font-size:.85rem; color:var(--dim); }
+  .links a { color:var(--dim); }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>SEVEN DAYS</h1>
+  <p class="tag">wake up</p>
+  <p>Seven friends. Seven tapes. A prologue, then seven recorded days you can watch, and only partly steer.</p>
+  <p>Built for RUN.world. Best on a phone, in portrait, with sound on.</p>
+  <p><a id="play" class="btn" hidden>PLAY</a></p>
+  <p id="soon" class="soon">The playable build isn't published yet.</p>
+  <p class="links"><a id="src" href="#">Source on GitHub</a></p>
+</main>
+<script>
+  // Set this once the game has a RUN.world link. Leave empty until then: the page shows "not published yet".
+  var PLAY_URL = "";
+
+  var play = document.getElementById("play"), soon = document.getElementById("soon");
+  if (/^https:\/\//.test(PLAY_URL)) { play.href = PLAY_URL; play.hidden = false; soon.hidden = true; }
+
+  // On GitHub Pages (<user>.github.io/<repo>/) derive the repo link; elsewhere hide it.
+  var src = document.getElementById("src"), m = location.hostname.match(/^([^.]+)\.github\.io$/), repo = location.pathname.split("/")[1];
+  if (m && repo) src.href = "https://github.com/" + m[1] + "/" + repo; else src.hidden = true;
+</script>
+</body>
+</html>
