@@ -46,45 +46,72 @@ export class BodycamRig {
     dragStart() { /* no-op: look offset already decays gently in update() */ }
     dragEnd() { /* no-op */ }
 
+    /** 'tape' = someone else's handheld camera (pass 1); 'body' = your own walk, tuned to match the interactive game (pass 2). */
+    style: 'tape' | 'body' = 'tape';
+    /** Look follows the pointer exactly (no easing toward the scripted yaw). Used while the player is the one steering. */
+    directLook = false;
+    /** Crouch: how far the eyes are lowered below the scene's eye height, in metres (<= 0). */
+    eyeDrop = 0;
+
+    private lastPos = new THREE.Vector3(NaN, 0, 0);
+    private speed = 0;
+    private flagAmp = 0;
+    private amp = 0;
+
     update(dt: number, reducedMotion = false) {
         this.t += dt;
         const t = this.t;
         const motion = reducedMotion ? 0.25 : 1;
-        const w = this.walk;
-        const phaseSpeed = reducedMotion ? 5 : 7.2;
+        // Measured ground speed: rails, free roam and explore all just move rig.pos, so the walk cycle follows the real motion.
+        if (!Number.isNaN(this.lastPos.x) && dt > 0) {
+            const v = Math.hypot(this.pos.x - this.lastPos.x, this.pos.z - this.lastPos.z) / dt;
+            const inst = v < 12 ? v : this.speed; // a cut or teleport is not a run
+            this.speed += (inst - this.speed) * (1 - Math.exp(-9 * dt));
+        }
+        this.lastPos.copy(this.pos);
+        // scenes switch `walk` on and off like a lamp: ease it so the bob never snaps
+        this.flagAmp += (this.walk - this.flagAmp) * (1 - Math.exp(-6 * dt));
+        const measured = Math.min(1.4, this.speed / 3);
+        const target = Math.max(measured, this.speed < 0.2 ? this.flagAmp * 0.6 : 0);
+        this.amp += (target - this.amp) * (1 - Math.exp(-8 * dt));
+        const w = this.amp;
+        // stride phase advances with distance walked (one step every 1.35 m), like the interactive game
+        const rate = this.speed > 0.25 ? this.speed * Math.PI / 1.35 : this.flagAmp * (reducedMotion ? 5 : 6);
         const prevPhase = this.phase;
-        this.phase += dt * phaseSpeed * w;
+        this.phase += dt * rate;
         if (this.onStep && Math.floor(this.phase / Math.PI) > Math.floor(prevPhase / Math.PI)) this.onStep();
-        const bobY = Math.abs(Math.sin(this.phase)) * 0.055 * w * motion;
-        const sway = Math.sin(this.phase * 0.5) * 0.02 * w * motion;
+        const body = this.style === 'body';
+        const bobY = -Math.cos(this.phase * 2) * (body ? 0.034 : 0.05) * w * motion;
+        const sway = Math.sin(this.phase);
         // camera target = scene pose + free-look offset (decays gently toward centre)
         this.userYaw *= Math.pow(0.25, dt * 0.35);
         this.userPitch *= Math.pow(0.25, dt * 0.35);
         this.userRoll *= Math.pow(0.001, dt * 2);
-        // smooth toward the scripted yaw/pitch — never snap
-        const k = 1 - Math.pow(0.0001, dt);
+        // smooth toward the scripted yaw/pitch — never snap (unless the player is steering)
+        const k = this.directLook ? 1 : 1 - Math.pow(0.0001, dt);
         this.smoothedYaw += (this.yaw - this.smoothedYaw) * k;
         this.smoothedPitch += (this.pitch - this.smoothedPitch) * k;
         this.camYaw = this.smoothedYaw + this.userYaw;
         this.camPitch = this.smoothedPitch + this.userPitch;
-        // smoothed handheld noise
-        const nx = (Math.sin(t * 1.9) + Math.sin(t * 3.7) * 0.5) * 0.006 * motion;
-        const ny = (Math.cos(t * 1.6) + Math.sin(t * 2.9) * 0.5) * 0.005 * motion;
+        // handheld noise: a camera operator's hands in 'tape', just a living tremor in 'body'
+        const hh = body ? 0.35 : 1;
+        const nx = (Math.sin(t * 1.9) + Math.sin(t * 3.7) * 0.5) * 0.006 * motion * hh;
+        const ny = (Math.cos(t * 1.6) + Math.sin(t * 2.9) * 0.5) * 0.005 * motion * hh;
         const shX = (Math.random() - 0.5) * 0.02 * this.shake * motion;
         const shY = (Math.random() - 0.5) * 0.02 * this.shake * motion;
         this.camera.position.set(
             this.pos.x + nx * 8,
-            this.pos.y - bobY + ny * 8 + shY,
+            this.pos.y + this.eyeDrop + bobY + ny * 8 + shY,
             this.pos.z
         );
         this.camera.rotation.order = 'YXZ';
         this.camera.rotation.set(
-            this.camPitch + ny + Math.sin(t * 1.6) * 0.002 * motion - bobY * 0.15,
-            this.camYaw + nx + sway * 0.1,
-            (this.roll + Math.sin(this.phase) * 0.01 * w + nx * 2) * motion
+            this.camPitch + ny + Math.sin(t * 1.6) * 0.002 * motion + bobY * 0.15,
+            this.camYaw + nx + sway * 0.004 * w * motion,
+            (this.roll + sway * 0.008 * w + nx * 2) * motion
         );
         this.camera.rotation.z += shX + this.userRoll * motion;
-        this.camera.fov = this.baseFov + this.fovKick + Math.sin(this.phase) * 0.7 * w * motion;
+        this.camera.fov = this.baseFov + this.fovKick + Math.sin(this.phase) * 0.25 * w * motion;
         this.camera.updateProjectionMatrix();
     }
     private phase = 0;

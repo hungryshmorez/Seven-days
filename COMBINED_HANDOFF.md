@@ -41,6 +41,14 @@ On the opening beach of pass 1 the boatman is standing by the boat with his dog.
 
 The cinematic game's own idle "pulse" ending still exists and routes to `credits('pulse')`.
 
+## How the two passes move
+
+- **Pass 1, cinematic chapters (tapes you watch):** no walking. The camera rides the authored rail and the player only drags to look a little. The rig is a handheld camera (`BodycamRig.style = 'tape'`): more hand shake, stronger bob.
+- **Pass 2, cinematic chapters (free roam):** you are the body. `style = 'body'`, FOV 75, same walk/run/crouch speeds as the interactive game (3.2 / 5.6 / 1.6 m/s), eased start and stop, crouch lowers the eyes. Touch: stick, RUN (hold), CROUCH (toggle).
+- **Pass 1, interactive:** full control. **Pass 2, interactive (tape):** autopilot, look only (hold Shift/W to fast-forward).
+- The walk cycle (`src/cinema/rig.ts`) follows the measured ground speed of `rig.pos`, so rails and free roam share one bob; scenes' `rig.walk` flag is only a fallback and is eased, never snapped.
+- Test: `tests/combined/move.cjs` (virtual-time harness `vt.cjs`).
+
 ## Where things live
 
 | Piece | File |

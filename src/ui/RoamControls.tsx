@@ -5,6 +5,8 @@ import { store, useStore } from '../state/store.ts';
 export default function RoamControls() {
     const roam = useStore((s) => s.roam);
     const useLabel = useStore((s) => s.useLabel);
+    const crouch = useStore((s) => !!s.roamCrouch);
+    const run = useStore((s) => !!s.roamRun);
     const knob = useRef<HTMLDivElement>(null);
     const base = useRef<HTMLDivElement>(null);
     if (!roam) return null;
@@ -33,10 +35,24 @@ export default function RoamControls() {
             >
                 <div ref={knob} className="pointer-events-none absolute left-1/2 top-1/2 -ml-7 -mt-7 h-14 w-14 rounded-full bg-white/25" />
             </div>
+            <button
+                type="button"
+                aria-label="Run (hold)"
+                className={`pointer-events-auto absolute bottom-6 right-[84px] h-14 w-14 touch-none select-none rounded-full border border-white/40 text-[11px] font-bold ${run ? 'bg-white/40' : 'bg-white/10'}`}
+                onPointerDown={(e) => { (e.target as HTMLElement).setPointerCapture?.(e.pointerId); store.patch({ roamRun: true }); }}
+                onPointerUp={() => store.patch({ roamRun: false })}
+                onPointerCancel={() => store.patch({ roamRun: false })}
+            >RUN</button>
+            <button
+                type="button"
+                aria-label="Crouch (toggle)"
+                className={`pointer-events-auto absolute bottom-6 right-6 h-14 w-14 select-none rounded-full border border-white/40 text-[10px] font-bold ${crouch ? 'bg-white/40' : 'bg-white/10'}`}
+                onClick={() => store.patch({ roamCrouch: !store.get().roamCrouch })}
+            >CROUCH</button>
             {useLabel && (
                 <button
                     type="button"
-                    className="pointer-events-auto absolute bottom-28 right-6 max-w-[48%] rounded-xl border border-white/50 bg-black/60 px-4 py-3 text-sm font-bold active:scale-95"
+                    className="pointer-events-auto absolute bottom-24 right-6 max-w-[48%] rounded-xl border border-white/50 bg-black/60 px-4 py-3 text-sm font-bold active:scale-95"
                     onClick={() => window.dispatchEvent(new Event('sd-use'))}
                 >
                     <span className="mr-2 rounded bg-white px-1.5 py-0.5 text-black">E</span>{useLabel}

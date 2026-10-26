@@ -68,6 +68,9 @@ export interface AppState {
     roam: boolean;
     /** Live position of the on-screen walk stick, -1..1 on each axis (y is forward-negative like the keys). */
     moveStick?: { x: number; y: number };
+    /** Touch buttons in roam: hold to run, tap to toggle crouch (same as the interactive game). */
+    roamRun?: boolean;
+    roamCrouch?: boolean;
     /** What the USE button would do right now ('' = nothing). */
     useLabel: string;
     /** True while the combined journey owns playback. */

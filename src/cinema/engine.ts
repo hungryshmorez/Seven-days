@@ -142,6 +142,8 @@ export class CinemaEngine {
         this.renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none;';
         host.appendChild(this.renderer.domElement);
         this.rig = new BodycamRig(w / h);
+        // pass 2 is your own body: same field of view and walk feel as the interactive game. Pass 1 stays someone else's handheld camera.
+        if (opts.freeRoam) { this.rig.style = 'body'; this.rig.baseFov = 75; }
         this.vhs = new VhsPass(this.renderer, Math.floor(w * this.renderer.getPixelRatio()), Math.floor(h * this.renderer.getPixelRatio()));
         this.audio = new CinemaAudio();
         attachClipAudio(this.audio.master);
@@ -216,26 +218,48 @@ export class CinemaEngine {
         // Captions only: no synthesized voice playback. Opts are kept for call-site compatibility.
         void opts;
     }
-    /** Walk with WASD/arrows (or the on-screen stick), look with drag. Collides with walls. */
-    private stepExplore(dt: number) {
-        const ex = this.explore;
+    /** Same body as the interactive game: easing, walk 3.2 / run 5.6 / crouch 1.6 m/s, crouch lowers the eyes. */
+    private pv = { x: 0, z: 0 };
+    private eyeDy = 0;
+    private readMove() {
         let mx = 0, mz = 0;
         if (this.keys.has('w') || this.keys.has('arrowup')) mz -= 1;
         if (this.keys.has('s') || this.keys.has('arrowdown')) mz += 1;
         if (this.keys.has('a') || this.keys.has('arrowleft')) mx -= 1;
         if (this.keys.has('d') || this.keys.has('arrowright')) mx += 1;
-        this.rig.walk = mx || mz ? 1 : 0;
-        if (!mx && !mz) return;
+        const st = store.get();
+        const stick = st.moveStick;
+        if (stick && (Math.abs(stick.x) > 0.1 || Math.abs(stick.y) > 0.1)) { mx += stick.x; mz += stick.y; }
         const len = Math.hypot(mx, mz);
+        if (len > 1) { mx /= len; mz /= len; }
+        const crouch = this.keys.has('c') || this.keys.has('control') || !!st.roamCrouch;
+        const run = (this.keys.has('shift') || !!st.roamRun) && !crouch;
+        return { mx, mz, moving: len > 0.1, crouch, run };
+    }
+    /** Eases the walking velocity toward the wanted one and the eyes toward standing / crouching height. */
+    private easeBody(dt: number, tvx: number, tvz: number, crouch: boolean) {
+        const a = 1 - Math.exp(-12 * dt);
+        this.pv.x += (tvx - this.pv.x) * a;
+        this.pv.z += (tvz - this.pv.z) * a;
+        this.eyeDy += ((crouch ? -0.4 : 0) - this.eyeDy) * (1 - Math.exp(-10 * dt));
+    }
+    /** Walk with WASD/arrows (or the on-screen stick), look with drag. Collides with walls. */
+    private stepExplore(dt: number) {
+        const ex = this.explore;
+        const { mx, mz, moving, crouch, run } = this.readMove();
+        const speed = crouch ? 1.6 : run ? 5.6 : 3.2;
         const yaw = this.rig.yaw;
-        const dx = ((mx * Math.cos(yaw)) + (mz * Math.sin(yaw))) / len * ex.speed * dt;
-        const dz = ((-mx * Math.sin(yaw)) + (mz * Math.cos(yaw))) / len * ex.speed * dt;
+        const tvx = moving ? (mx * Math.cos(yaw) + mz * Math.sin(yaw)) * speed : 0;
+        const tvz = moving ? (-mx * Math.sin(yaw) + mz * Math.cos(yaw)) * speed : 0;
+        this.easeBody(dt, tvx, tvz, crouch);
         const pos = this.rig.pos;
-        const tryX = pos.x + dx, tryZ = pos.z + dz;
+        const tryX = pos.x + this.pv.x * dt, tryZ = pos.z + this.pv.z * dt;
         const inside = (x: number, z: number) => !ex.bounds || (x >= ex.bounds.minX && x <= ex.bounds.maxX && z >= ex.bounds.minZ && z <= ex.bounds.maxZ);
         const blocked = (x: number, z: number) => ex.collide?.(x, z) ?? false;
-        if (inside(tryX, pos.z) && !blocked(tryX, pos.z)) pos.x = tryX;
-        if (inside(pos.x, tryZ) && !blocked(pos.x, tryZ)) pos.z = tryZ;
+        if (inside(tryX, pos.z) && !blocked(tryX, pos.z)) pos.x = tryX; else this.pv.x = 0;
+        if (inside(pos.x, tryZ) && !blocked(pos.x, tryZ)) pos.z = tryZ; else this.pv.z = 0;
+        this.rig.eyeDrop = this.eyeDy;
+        this.rig.walk = 0; // the walk cycle follows the real speed now
     }
 
     /** Free roam: the scripted rail goes on playing; the player's own offset and view are layered on top and tethered to it. */
@@ -243,7 +267,7 @@ export class CinemaEngine {
         const rig = this.rig, fr = this.fr, ex = this.explore;
         // prologue: the plane crash plays as a recording; the beach after it is the player's to walk
         if (this.opts.holdAtCamp && this.dir.time < PROLOGUE_BEACH_START) { fr.init = false; fr.out.set(NaN, 0, 0); return; }
-        if (!fr.init) { fr.init = true; fr.yaw = rig.yaw; fr.pitch = rig.pitch; fr.rail.copy(rig.pos); fr.off.set(0, 0, 0); }
+        if (!fr.init) { fr.init = true; fr.yaw = rig.yaw; fr.pitch = rig.pitch; this.syncRail(); fr.off.set(0, 0, 0); }
         // prologue hold: let the player roam the beach and camp; the radio beat waits for them
         if (this.opts.holdAtCamp && this.dir.time > PROLOGUE_BEACH_START + 34.9 && !this.holdDone) {
             this.holdT += dt;
@@ -252,43 +276,36 @@ export class CinemaEngine {
             if (Math.hypot(dx, dz) < 5 || this.holdT > 150) {
                 this.holdDone = true; ex.active = false;
                 // the scripted beats take over from wherever the player is standing
-                fr.rail.copy(rig.pos); fr.off.set(0, 0, 0);
+                this.syncRail(); fr.off.set(0, 0, 0);
             }
         }
-        if (!rig.pos.equals(fr.out)) fr.rail.copy(rig.pos); // the scene moved the rail this frame
-        let mx = 0, mz = 0;
-        if (this.keys.has('w') || this.keys.has('arrowup')) mz -= 1;
-        if (this.keys.has('s') || this.keys.has('arrowdown')) mz += 1;
-        if (this.keys.has('a') || this.keys.has('arrowleft')) mx -= 1;
-        if (this.keys.has('d') || this.keys.has('arrowright')) mx += 1;
-        const stick = store.get().moveStick;
-        if (stick && (Math.abs(stick.x) > 0.1 || Math.abs(stick.y) > 0.1)) { mx += stick.x; mz += stick.y; }
-        const len = Math.hypot(mx, mz);
-        const walking = len > 0.05;
-        if (walking) {
-            const k = Math.min(1, 1 / len);
-            const sp = (this.keys.has('shift') ? 4.2 : 2.6) * dt;
-            const dx = (mx * Math.cos(fr.yaw) + mz * Math.sin(fr.yaw)) * k * sp;
-            const dz = (-mx * Math.sin(fr.yaw) + mz * Math.cos(fr.yaw)) * k * sp;
-            const tryOff = (ox: number, oz: number) => {
-                const x = fr.rail.x + ox, z = fr.rail.z + oz;
-                if (ex.bounds && (x < ex.bounds.minX || x > ex.bounds.maxX || z < ex.bounds.minZ || z > ex.bounds.maxZ)) return false;
-                return !(ex.collide?.(x, z));
-            };
-            if (tryOff(fr.off.x + dx, fr.off.z)) fr.off.x += dx;
-            if (tryOff(fr.off.x, fr.off.z + dz)) fr.off.z += dz;
-        }
+        if (!rig.pos.equals(fr.out)) this.syncRail(); // the scene moved the rail this frame
+        const { mx, mz, moving, crouch, run } = this.readMove();
+        const speed = crouch ? 1.6 : run ? 5.6 : 3.2;
+        const tvx = moving ? (mx * Math.cos(fr.yaw) + mz * Math.sin(fr.yaw)) * speed : 0;
+        const tvz = moving ? (-mx * Math.sin(fr.yaw) + mz * Math.cos(fr.yaw)) * speed : 0;
+        this.easeBody(dt, tvx, tvz, crouch);
+        const tryOff = (ox: number, oz: number) => {
+            const x = fr.rail.x + ox, z = fr.rail.z + oz;
+            if (ex.bounds && (x < ex.bounds.minX || x > ex.bounds.maxX || z < ex.bounds.minZ || z > ex.bounds.maxZ)) return false;
+            return !(ex.collide?.(x, z));
+        };
+        const dx = this.pv.x * dt, dz = this.pv.z * dt;
+        if (tryOff(fr.off.x + dx, fr.off.z)) fr.off.x += dx; else this.pv.x = 0;
+        if (tryOff(fr.off.x, fr.off.z + dz)) fr.off.z += dz; else this.pv.z = 0;
         // the tether: the recording drags you on if you fall too far behind it
         const R = ex.active ? 60 : 9;
         const d = Math.hypot(fr.off.x, fr.off.z);
         if (d > R) { fr.off.x *= R / d; fr.off.z *= R / d; }
         rig.pos.set(fr.rail.x + fr.off.x, fr.rail.y, fr.rail.z + fr.off.z);
+        rig.eyeDrop = this.eyeDy;
         fr.out.copy(rig.pos);
         rig.yaw = fr.yaw; rig.pitch = fr.pitch;
-        rig.walk = walking ? 1 : 0;
+        rig.walk = 0; // the walk cycle follows the real speed now
         rig.lookFreedom = 0;
     }
     private holdDone = false;
+    private syncRail() { this.fr.rail.copy(this.rig.pos); }
 
     /** The chapter is over: the player is in a living room with the tape and the VCR. */
     private enterVcr() {
@@ -413,6 +430,8 @@ export class CinemaEngine {
             if (this.vcrActive) this.stepExplore(dt);
             else if (this.opts.freeRoam) this.stepFreeRoam(dt);
             else if (this.explore.active) this.stepExplore(dt);
+            else { this.pv.x = 0; this.pv.z = 0; this.eyeDy = 0; this.rig.eyeDrop = 0; }
+            this.rig.directLook = (!!this.opts.freeRoam && this.fr.init) || this.vcrActive;
             this.rig.update(dt, store.get().reducedMotion);
             this.rig.fovKick = kick;
             const tc = Math.floor(this.dir.time);
@@ -445,7 +464,7 @@ export class CinemaEngine {
         window.removeEventListener('keydown', this.onKey);
         window.removeEventListener('keyup', this.onKeyUp);
         window.removeEventListener('sd-use', this.onUseEvt);
-        store.patch({ roam: false, useLabel: '', moveStick: undefined });
+        store.patch({ roam: false, useLabel: '', moveStick: undefined, roamRun: false, roamCrouch: false });
         try { window.speechSynthesis.cancel(); } catch { /* none */ }
         void stopClip(); // a clip in progress is saved, not lost, when the chapter ends or the player leaves
         this.audio.dispose();
